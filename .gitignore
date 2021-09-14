@@ -2,3 +2,5 @@
 *.o
 
 util/rb-tree/test
+util/rb-tree/.idea
+util/rb-tree/cmake-build-debug
