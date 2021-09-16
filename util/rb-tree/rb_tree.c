@@ -294,7 +294,7 @@ void tree_delete_fixup(Tree* tree, Node* node, Node* parent) {
         if (parent->left == node) {
             other = parent->right;
             if (IS_RED(other)) {
-                // Case 1: x的兄弟w是红色的
+                // Case 1: x的兄弟w是红色的 234树法则--红节点向父节点缩进，旋转父节点，找到真的兄弟节点
                 MARK_BLACK(other);
                 MARK_RED(parent);
                 tree_left_rotate(tree, parent);
@@ -596,7 +596,7 @@ void tree_print(Tree* tree) {
             } else if (res[x][i] == '/') {
                 printf("/");
             } else {
-                if (res[x][i] > 100) {
+                if (res[x][i] >= 100) {
                     printf("\033[47;30m%d\033[0m", res[x][i] - 100);
                 } else {
                     printf("\033[31;4m%d\033[0m", res[x][i]);
