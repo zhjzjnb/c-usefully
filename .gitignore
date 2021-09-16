@@ -4,3 +4,5 @@
 util/rb-tree/test
 util/rb-tree/.idea
 util/rb-tree/cmake-build-debug
+util/skiplist/.idea
+util/skiplist/cmake-build-debug
