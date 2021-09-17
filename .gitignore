@@ -6,3 +6,5 @@ util/rb-tree/.idea
 util/rb-tree/cmake-build-debug
 util/skiplist/.idea
 util/skiplist/cmake-build-debug
+util/http-server/.idea
+util/http-server/cmake-build-debug
