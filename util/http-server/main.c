@@ -12,15 +12,72 @@
 
 #define SERVER_STRING "Server: simple/"SERVER_VERSION"\r\n"
 
-#define CONTENT_BODY "<html><h1>hello server<h1></html>"
+#define CONTENT_BODY "<html><script type=\"text/javascript\" src=\"/nav.js\"></script><h1>hello server<h1></html>"
 
-void task_func(void* arg) {
+int get_line(int sock, char *buf, int len) {
+    int rl = 0;
+    int lr = 0,ln=0;
+    char c;
+    while(1){
+        int r = recv(sock, &c, 1, 0);
+        if (r <= 0) {
+            return -1;
+        }
+        if(c=='\r'){
+            if(lr){
+                return -1;
+            }
+            lr = 1;
+            continue;
+        }else if(c=='\n'){
+            break;
+        }
+
+        buf[rl++] = c;
+        if (rl == len) {
+            return rl;
+        }
+    }
+    return rl;
+}
+
+
+void task_func(void *arg) {
     printf("socket work:%u %p\n", pthread_self(), arg);
     int c = (int) arg;
     char buf[1024];
-    int rn = 0;
+
+    int rn = get_line(c, buf, sizeof(buf));
+    if(!rn){
+        goto LAST;
+    }
+
+    char *p = strtok(buf," ");
+    char *method=NULL,*url=NULL,*protocol = NULL;
+    while(p){
+        if(!method){
+            method = p;
+        }else if(!url){
+            url = p;
+        }else{
+            protocol = p;
+        }
+        p = strtok(NULL," ");
+    }
+    if (!method||!url||!protocol){
+        goto LAST;
+    }
+    printf("method:%s url:%s protocol:%s\n",method,url,protocol);
+
+
+
 
     while (1) {
+//        int rn = get_line(c, buf, sizeof(buf));
+//        if (rn < 0) {
+//            break;
+//        }
+//        printf("get line:%s\n",buf);
         int r = recv(c, buf, sizeof(buf), 0);
 
         if (r <= 0) {
@@ -42,20 +99,21 @@ void task_func(void* arg) {
         int ns = send(c, buf, sl, 0);
 
 
-        printf("%s\n%d %d\n",buf, ns,sl);
+//        printf("%s\n%d %d\n", buf, ns, sl);
 
 
-        close(c);
+//
         break;
     }
-
+    LAST:
+    close(c);
 
 }
 
 /*
  * 传递端口号  0的话 动态分配
  */
-int startup(uint16_t* port) {
+int startup(uint16_t *port) {
     int httpd = 0;
     int on = 1;
     struct sockaddr_in name;
@@ -70,12 +128,12 @@ int startup(uint16_t* port) {
     if ((setsockopt(httpd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on))) < 0) {
         err_exit("setsockopt failed");
     }
-    if (bind(httpd, (struct sockaddr*) &name, sizeof(name)) < 0)
+    if (bind(httpd, (struct sockaddr *) &name, sizeof(name)) < 0)
         err_exit("bind");
     if (*port == 0)  /* if dynamically allocating a port */
     {
         socklen_t namelen = sizeof(name);
-        if (getsockname(httpd, (struct sockaddr*) &name, &namelen) == -1)
+        if (getsockname(httpd, (struct sockaddr *) &name, &namelen) == -1)
             err_exit("getsockname");
         *port = ntohs(name.sin_port);
     }
@@ -84,12 +142,12 @@ int startup(uint16_t* port) {
     return (httpd);
 }
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
     threadpool_t pool;
     threadpool_init(&pool, 5, 128);
 
 
-    uint16_t port = 8080;
+    uint16_t port = 8000;
     if (argc == 2) {
         port = atoi(argv[1]);
     }
@@ -106,10 +164,10 @@ int main(int argc, char** argv) {
 
 
     while (1) {
-        client_sock = accept(server_sock, (struct sockaddr*) &client_name, &client_name_len);
+        client_sock = accept(server_sock, (struct sockaddr *) &client_name, &client_name_len);
         if (client_sock == -1)
             err_exit("accept");
-        thread_task t = {task_func, (void*) client_sock};
+        thread_task t = {task_func, (void *) client_sock};
         threadpool_submit(&pool, t);
     }
     close(server_sock);
