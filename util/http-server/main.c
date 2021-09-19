@@ -14,22 +14,32 @@
 
 #define CONTENT_BODY "<html><script type=\"text/javascript\" src=\"/nav.js\"></script><h1>hello server<h1></html>"
 
+#define GEN_ERR_CODE(code, msg) void response_##code(int fd){\
+const char* str = "HTTP/1.1 "#code" BAD REQUEST\r\n"SERVER_STRING"Content-Type: text/html\r\n" "\r\n";\
+send(fd,str,strlen(str),0);\
+}
+
+GEN_ERR_CODE(400, "BAD REQUEST")
+
+GEN_ERR_CODE(404, "Not Found")
+
+
 int get_line(int sock, char *buf, int len) {
     int rl = 0;
-    int lr = 0,ln=0;
+    int lr = 0, ln = 0;
     char c;
-    while(1){
+    while (1) {
         int r = recv(sock, &c, 1, 0);
         if (r <= 0) {
             return -1;
         }
-        if(c=='\r'){
-            if(lr){
+        if (c == '\r') {
+            if (lr) {
                 return -1;
             }
             lr = 1;
             continue;
-        }else if(c=='\n'){
+        } else if (c == '\n') {
             break;
         }
 
@@ -41,6 +51,23 @@ int get_line(int sock, char *buf, int len) {
     return rl;
 }
 
+char *get_file_data(const char *fname, size_t *len) {
+    FILE *f = fopen(fname, "rb");
+    if (f == NULL) {
+        return NULL;
+    }
+    fseek(f, 0, SEEK_END);
+    size_t l = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    char *data = malloc(l);
+    fread(data, l, 1, f);
+    fclose(f);
+    if (len) {
+        *len = l;
+    }
+    return data;
+}
+
 
 void task_func(void *arg) {
     printf("socket work:%u %p\n", pthread_self(), arg);
@@ -48,28 +75,59 @@ void task_func(void *arg) {
     char buf[1024];
 
     int rn = get_line(c, buf, sizeof(buf));
-    if(!rn){
+    if (!rn) {
         goto LAST;
     }
-
-    char *p = strtok(buf," ");
-    char *method=NULL,*url=NULL,*protocol = NULL;
-    while(p){
-        if(!method){
-            method = p;
-        }else if(!url){
-            url = p;
-        }else{
-            protocol = p;
+    printf("head:%s\n", buf);
+    char *method = NULL, *url = NULL, *protocol = NULL;
+    int head = 0;
+    for (int i = 0; i < rn; ++i) {
+        if (buf[i] == ' ') {
+            buf[i] = '\0';
+            if (!method) {
+                method = &buf[head];
+            } else if (!url) {
+                url = &buf[head];
+                protocol = &buf[i + 1];
+                break;
+            }
+            head = i + 1;
         }
-        p = strtok(NULL," ");
     }
-    if (!method||!url||!protocol){
+
+
+    if (!method || !url || !protocol) {
+        response_400(c);
         goto LAST;
     }
-    printf("method:%s url:%s protocol:%s\n",method,url,protocol);
+    printf("method:%s url:%s protocol:%s\n", method, url, protocol);
 
+    if (strcasecmp(method, "GET") == 0) {
+        url++;
+        if (*url == '\0') {
+            url = "index.html";
+        }
 
+        size_t l;
+        char *data = get_file_data(url,&l);
+        if(data==NULL){
+            response_404(c);
+            goto LAST;
+        }
+
+        buf[0] = 0;
+        int sl = sprintf(buf, "HTTP/1.1 200 OK\r\n");
+        sl += sprintf(buf + sl, SERVER_STRING);
+        sl += sprintf(buf + sl, "Content-Type: text/html;charset=utf-8\r\n");
+        sl += sprintf(buf + sl, "Content-Length:%d\r\n\r\n", l);
+        send(c, buf, sl, 0);
+        send(c, data, l, 0);
+        free(data);
+        goto LAST;
+
+    } else if (strcasecmp(method, "POST") == 0) {
+
+    }
 
 
     while (1) {
@@ -106,6 +164,7 @@ void task_func(void *arg) {
         break;
     }
     LAST:
+
     close(c);
 
 }
