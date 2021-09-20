@@ -52,6 +52,9 @@ int get_line(int sock, char *buf, int len) {
 }
 
 char *get_file_data(const char *fname, size_t *len) {
+    if (*fname == '/') {
+        fname++;
+    }
     FILE *f = fopen(fname, "rb");
     if (f == NULL) {
         return NULL;
@@ -68,33 +71,56 @@ char *get_file_data(const char *fname, size_t *len) {
     return data;
 }
 
+void skip_recv(int fd) {
+    char buf[1024] = {0};
+    while (1) {
+        int rn = get_line(fd, buf, sizeof(buf));
+
+        if (!rn) {
+            break;
+        }
+        if (buf[0] == '\n') {
+            break;
+        }
+    }
+}
+
 
 void task_func(void *arg) {
     printf("socket work:%u %p\n", pthread_self(), arg);
     int c = (int) arg;
-    char buf[1024];
+    char buf[1024] = {0};
 
     int rn = get_line(c, buf, sizeof(buf));
     if (!rn) {
         goto LAST;
     }
-    printf("head:%s\n", buf);
+    printf("head:%s :%d\n", buf, rn);
     char *method = NULL, *url = NULL, *protocol = NULL;
     int head = 0;
+    int l = 0;
     for (int i = 0; i < rn; ++i) {
         if (buf[i] == ' ') {
             buf[i] = '\0';
             if (!method) {
-                method = &buf[head];
+                l = i - head + 1;
+                method = malloc(l);
+                memcpy(method, &buf[head], l - 1);
+                method[l - 1] = 0;
             } else if (!url) {
-                url = &buf[head];
-                protocol = &buf[i + 1];
+                l = i - head + 1;
+                url = malloc(l);
+                memcpy(url, &buf[head], l - 1);
+                url[l - 1] = 0;
+
+                protocol = malloc(rn - i);
+                memcpy(protocol, &buf[i + 1], rn - i - 1);
+                protocol[rn - i - 1] = 0;
                 break;
             }
             head = i + 1;
         }
     }
-
 
     if (!method || !url || !protocol) {
         response_400(c);
@@ -102,15 +128,19 @@ void task_func(void *arg) {
     }
     printf("method:%s url:%s protocol:%s\n", method, url, protocol);
 
+
     if (strcasecmp(method, "GET") == 0) {
-        url++;
-        if (*url == '\0') {
-            url = "index.html";
+        skip_recv(c);
+
+        if (*(url + 1) == '\0') {
+            url = realloc(url, 11);
+            memcpy(url, "index.html", 10);
+            url[10] = 0;
         }
 
         size_t l;
-        char *data = get_file_data(url,&l);
-        if(data==NULL){
+        char *data = get_file_data(url, &l);
+        if (data == NULL) {
             response_404(c);
             goto LAST;
         }
@@ -120,9 +150,15 @@ void task_func(void *arg) {
         sl += sprintf(buf + sl, SERVER_STRING);
         sl += sprintf(buf + sl, "Content-Type: text/html;charset=utf-8\r\n");
         sl += sprintf(buf + sl, "Content-Length:%d\r\n\r\n", l);
-        send(c, buf, sl, 0);
-        send(c, data, l, 0);
+        int ls = send(c, buf, sl, 0);
+
+//        printf("%d  %d\n", ls, sl);
+        ls = send(c, data, l, 0);
+
+//        printf("%d  %d\n", ls, l);
         free(data);
+
+
         goto LAST;
 
     } else if (strcasecmp(method, "POST") == 0) {
@@ -130,41 +166,10 @@ void task_func(void *arg) {
     }
 
 
-    while (1) {
-//        int rn = get_line(c, buf, sizeof(buf));
-//        if (rn < 0) {
-//            break;
-//        }
-//        printf("get line:%s\n",buf);
-        int r = recv(c, buf, sizeof(buf), 0);
-
-        if (r <= 0) {
-//            printf("recv:%d\n", r);
-//            printf("errno值： %d\n", errno);
-//            printf("错误信息： %s\n", strerror(errno));
-            return;
-        }
-        printf("recv from:%d\n%s\n", r, buf);
-
-        buf[0] = 0;
-        int sl = sprintf(buf, "HTTP/1.1 200 OK\r\n");
-        sl += sprintf(buf + sl, SERVER_STRING);
-//        sprintf(buf,"Content-Type: application/json\r\n\r\n");
-        sl += sprintf(buf + sl, "Content-Type: text/html;charset=utf-8\r\n");
-        sl += sprintf(buf + sl, "Content-Length:%d\r\n\r\n", strlen(CONTENT_BODY));
-
-        sl += sprintf(buf + sl, CONTENT_BODY);
-        int ns = send(c, buf, sl, 0);
-
-
-//        printf("%s\n%d %d\n", buf, ns, sl);
-
-
-//
-        break;
-    }
     LAST:
-
+    free(method);
+    free(url);
+    free(protocol);
     close(c);
 
 }
