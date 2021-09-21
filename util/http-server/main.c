@@ -51,6 +51,37 @@ int get_line(int sock, char *buf, int len) {
     return rl;
 }
 
+void get_file_extension(const char *fname, char *out, size_t *l) {
+    *l = 0;
+
+    int len = strlen(fname);
+
+    for (int i = len - 1; i >= 0; --i) {
+        if (fname[i] == '.') {
+            break;
+        }
+        (*l)++;
+    }
+
+    for (int i = 0; i < *l; i++) {
+        out[i] = fname[len + i - *l];
+    }
+    out[*l] = 0;
+
+}
+
+const char *get_content_type(const char *ext) {
+#define CASE_TYPE(tt, ee, append) if(!strcasecmp(ext,ee)) return tt"/"ee append
+
+    CASE_TYPE("image", "jpg", "");
+    CASE_TYPE("image", "png", "");
+
+    CASE_TYPE("text", "js", ";charset=utf-8");
+    CASE_TYPE("text", "html", ";charset=utf-8");
+
+    return "not impl";
+}
+
 char *get_file_data(const char *fname, size_t *len) {
     if (*fname == '/') {
         fname++;
@@ -145,10 +176,16 @@ void task_func(void *arg) {
             goto LAST;
         }
 
+        char exc[64] = {0};
+        size_t exl;
+        get_file_extension(url, exc, &exl);
+
+        const char *cont = get_content_type(exc);
+
         buf[0] = 0;
         int sl = sprintf(buf, "HTTP/1.1 200 OK\r\n");
         sl += sprintf(buf + sl, SERVER_STRING);
-        sl += sprintf(buf + sl, "Content-Type: text/html;charset=utf-8\r\n");
+        sl += sprintf(buf + sl, "Content-Type: %s\r\n", cont);
         sl += sprintf(buf + sl, "Content-Length:%d\r\n\r\n", l);
         int ls = send(c, buf, sl, 0);
 
