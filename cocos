@@ -1,0 +1,52 @@
+```lua
+local array = {}
+
+	local function get_view( parent, index, pos )
+		local info = array[index]
+		local button = ccui.Button:create(info)
+		button:setPosition(pos)
+		button:addTo(parent)
+		button:addClickEventListener(function() end)
+	end
+	local scrollsize = cc.size(560,750)
+	MUIUtility.createScrollViewWithProperty(self.ui.scrollView,array,scrollsize,180,385,3,2,cc.p(95,560),get_view,150)
+  
+-- 大小		宽度				高度			每行有几个   显示的行数  一个函数
+-- view_size, item_width, item_height, row_items, row_num, get_view
+function MUIUtility.createScrollViewWithProperty( scrollView, array, view_size, item_width, item_height, row_items, row_num ,first_item_pos, get_view, extHegiht )
+	local function getScrollRowNum(array)
+		local rows = 0
+		local num = #array
+		if num%row_items == 0 then
+			rows = num/row_items
+		else
+			rows = math.floor(num/row_items)+1
+		end
+		if rows <= row_num then
+			rows = row_num
+		end
+		return rows
+	end
+	local rows = getScrollRowNum(array)
+
+	local scrollView = scrollView or ccui.ScrollView:create()
+	extHegiht = extHegiht or 0
+
+	scrollView:setInnerContainerSize(cc.size(view_size.width,extHegiht+view_size.height+item_height*(rows-row_num)))
+	-- scrollView:setContentOffset(cc.p(0,-item_height*(rows-row_num)),false)
+	-- scrollView:setDirection(ccui.ScrollViewDir.vertical)
+
+	local x_off=1
+	for i=1,#array do
+		local x = first_item_pos.x+(x_off-1)*(item_width+15)
+		local y = first_item_pos.y-math.ceil((i/row_items-1))*(item_height+8)+(item_height)*(rows-row_num)
+		if x_off == row_items then
+			x_off=1
+		else
+			x_off=x_off+1
+		end
+		get_view(scrollView,i,cc.p(x,y+extHegiht))
+	end
+	return scrollView,rows,item_height
+end
+```
